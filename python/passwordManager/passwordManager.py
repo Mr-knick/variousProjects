@@ -41,20 +41,23 @@ class PasswordData:
     def __init__(self, arguments=None):
         if arguments is None:
             arguments = {}
-        self._password_dict = {}
-        self._passwords_visible = InputStyle.VISIBLE if arguments.get('passwords_visible', False) else InputStyle.HIDDEN
-        self._pass_validation = arguments.get('password_validation', True)
-        self._filepath = arguments.get('filepath', './pass.crypt')
+        self.__password_dict = {}
+        self.__master_password = ""
+        self.__passwords_visible = InputStyle.VISIBLE if arguments.get('passwords_visible', False) else InputStyle.HIDDEN
+        self.__pass_validation = arguments.get('password_validation', True)
+        self.__filepath = arguments.get('filepath', './pass.crypt')
+        self.__existing_password_file = False
+        self.app = None
 
-    def encode(self) -> json:
-        return json.dumps(self._password_dict).encode()
+    def __encode_json(self) -> json:
+        return json.dumps(self.__password_dict).encode()
 
-    def decode(self, data: bytearray) -> None:
-        decoded_json_data = data.decode()
-        self._password_dict = json.loads(decoded_json_data)
+    def __decode_and_load(self, data: str) -> None:
+        decoded_json_data = data
+        self.__password_dict = json.loads(decoded_json_data)
 
-    def set_password(self, app, username, password):
-        if app in self._password_dict:
+    def __set_password(self, app: str, username: str, password: str) -> None:
+        if app in self.__password_dict:
             print(f'Password already exists for {app} updating value. Do you wish to replace (yes/no) [no]')
             # warning setup logging
             user_input = input().lower().strip()
@@ -68,42 +71,103 @@ class PasswordData:
                     print(f'Invalid input please select (y or n) or q to quit')
                     if user_input == "q":
                         exit(0)
-        self._password_dict[app] = {'username': username, 'password': password}
+        self.__password_dict[app] = {'username': username, 'password': password}
         print(f'Password for {app} updated')
         return
 
-    def validate_username(self, username):
-        pass
+    def __validate_password(self, password) -> bool:
+        if self.__pass_validation:
+            pass
+        return True
 
-    def validate_password(self, password):
-        pass
+    def initialization_work_flow(self):
+        self.__find_file()
+        if self.__existing_password_file:
+            self.__enter_master_password()
+            data = decrypt_file(self.__master_password, self.__filepath)
+            self.__decode_and_load(data)
+            return
+        self.__enter_master_password(generate=True)
 
-    def loaded_info(self):
-        # print(f'Applications currently saved: {}')
-        # for app in self.password_dict:
-        #     print(f'app')
-
-        print(f'Settings:')
-        print(f'PasswordLength: {self.settings_dict.get('password_length', "Default (16)")}')
-        # print(f'PasswordLength: {self.settings_dict.get('password_length', "Default (16)")}')
-
-    def find_file(self):
-        if os.path.exists(self.settings_dict['filepath']):
-            print(f'Password file: {self.settings_dict['filepath']} found.')
+    def __find_file(self) -> None:
+        if os.path.exists(self.__filepath):
+            print(f'Password file: {self.__filepath} found.')
+            self.__existing_password_file = True
             return
         print(f'No previous password file found. If one exists follow the help instructions to load.')
 
-    def enter_master_password(self):
+    def __enter_master_password(self, generate: bool=False) -> None:
         while True:
-            password = get_user_input(self._passwords_visible, "Create or enter your existing master password: ")
+            password = get_user_input(self.__passwords_visible, "Create or enter your existing master password: ")
             if not validate_user_input(password):
                 print(f'Invalid input. Please try again.')
                 continue
-        print(f'Password entered (but not shown): {print_hidden(password)}')
-        return password
+            if generate:
+                if not self.__validate_password(password):
+                    print(f'Password does not meet security requirements.')
+                    continue
+                else:
+                    confirm_password = get_user_input(self.__passwords_visible, "Please confirm your master password: ")
+                    if confirm_password != password:
+                        print(f'Passwords do not match')
+                        continue
+        print(f'Password entered: {self._print_style(password)}')
+        self.__master_password = password
 
+    def _print_style(self, text: str, override_style: InputStyle=None) -> None:
+        if override_style == InputStyle.VISIBLE:
+            print(f'{text}')
+            return
+        if override_style == InputStyle.HIDDEN:
+            print(f'{print_hidden(text)}')
+            return
+        if self.__passwords_visible == InputStyle.VISIBLE:
+            print(f'{text}')
+            return
+        if self.__passwords_visible == InputStyle.HIDDEN:
+            print(f'{print_hidden(text)}')
+            return
+        print('Print style not set')
 
-def addToClipBoard(text):
+    def save_file(self):
+        encrypt_file(self.__master_password, self.__filepath, self.__encode_json())
+
+# fix
+    def view_applications(self):
+        all_passwords = pd.password_dict()
+        print(f'Passwords below select [number] to copy to clipboard. Select [p] to see plain-text. Select [0] to return to main menu.')
+        if all_passwords.size() == 0:
+            print(f'No passwords available please add or load a file to view passwords')
+            input()
+            return
+
+        print(f'There are {all_passwords.size()} passwords saved')
+        i = 0
+        tempPassArr = [{}] * all_passwords.size()-1
+        for p in all_passwords:
+            app_name = p['app']
+            username = p['app']['username']
+            password = p['app']['password']
+            print(f'[{i}] App: {app_name} : Username {username} : Password {password[0:2]}**********')
+            tempPassArr[i] = p
+            i+=1
+        user_selection = input()
+        if user_selection == 'p':
+            i = 0
+            for p in all_passwords:
+                app_name = p['app']
+                username = p['app']['username']
+                password = p['app']['password']
+                print(f'[{i}] App: {app_name} : Username {username} : Password {password}')
+                i += 1
+        elif user_selection == 0:
+            return
+        elif int(user_selection) in tempPassArr:
+            password_to_copy = tempPassArr[int(user_selection)]['app']['password']
+            add_to_clipboard(password_to_copy)
+            print(f'{tempPassArr[int(user_selection)]['app']} password copied to clipboard')
+
+def add_to_clipboard(text):
     command = 'echo ' + text.strip() + '| clip'
     os.system(command)
     print(f'{print_hidden(text)} copied to clipboard')
@@ -123,7 +187,6 @@ def validate_user_input(user_intput: Optional[str] = "") -> bool:
     elif type(user_intput) != string_types:
         return False
     return True
-
 
 def hidden_input(instruction: str) -> str:
     hidden_user_input = getpass.getpass(instruction)
@@ -195,79 +258,64 @@ def decrypt_file(password: str, file_path: str) -> str:
 
     return data.decode('UTF-8')
 
-def control_interface(pd):
+def single_password_workflow(pd):
+    pass
+
+def control_interface(pd: PasswordData) -> None:
     while True:
-        user_selection = input()
+        user_selection = validate_user_input(input())
+        if not user_selection:
+            continue
         clear_screen()
 
         if user_selection == "q":
             exit(0)
-        elif user_selection == 1:
-            load_file(pd)
-        elif user_selection == 2:
-            save_file(pd)
-        elif user_selection == 3:
-            view_applications(pd)
-        elif user_selection == 4:
+        elif user_selection == "s":
+            pd.save_file()
+        elif user_selection == "v":
+            application_view_control(pd)
+        elif user_selection == "g":
             generate_password()
-        elif user_selection == 5:
-            change_settings(pd)
         else:
             print(f'{user_selection} is not a valid option\n')
 
         print(f'Password Manager make selection below\n'
-              f'[L] Load File {pd.settings_dict.get('file', 'File not found')}\n'
-              f'[2] Save File {pd.settings_dict.get('file', 'File not found')}\n'
+              f'[3] View available applications\n'
+              f'[4] Generate a random password\n'
+              f'[s] Save current file with current master password\n'
+              f'[c] Change current master password\n'
+              f'[q] Exit application\n')
+
+
+def application_view_control(pd):
+    while True:
+        clear_screen()
+        user_selection = validate_user_input(input())
+        if not user_selection:
+            continue
+        if user_selection == 'v':
+            pass
+        elif user_selection == 'm':
+            pass
+        elif user_selection == 'c':
+            pass
+        elif user_selection == 'q':
+            pass
+        elif user_selection == 's':
+            pass
+        print(f'To view, modify, or create new passwords please make a selection below\n'
+              # f'[L] Load File {pd.settings_dict.get('file', 'File not found')}\n'
+              # f'[2] Save File {pd.settings_dict.get('file', 'File not found')}\n'
               f'[3] View available applications\n'
               f'[4] Generate a random password\n'
               f'[5] Settings\n'
               f'[q] Exit application\n')
 
-        # View Applications -> view password as plain-text
-        # copy password to clipboard for a given application
-
-def load_file(pd):
+def application_create_control(pd):
     pass
 
-def save_file(pd):
-    pass
-
-def view_applications(pd):
-    all_passwords = pd.password_dict()
-    print(f'Passwords below select [number] to copy to clipboard. Select [p] to see plain-text. Select [0] to return to main menu.')
-    if all_passwords.size() == 0:
-        print(f'No passwords available please add or load a file to view passwords')
-        input()
-        return
-
-    print(f'There are {all_passwords.size()} passwords saved')
-    i = 0
-    tempPassArr = [{}] * all_passwords.size()-1
-    for p in all_passwords:
-        app_name = p['app']
-        username = p['app']['username']
-        password = p['app']['password']
-        print(f'[{i}] App: {app_name} : Username {username} : Password {password[0:2]}**********')
-        tempPassArr[i] = p
-        i+=1
-    user_selection = input()
-    if user_selection == 'p':
-        i = 0
-        for p in all_passwords:
-            app_name = p['app']
-            username = p['app']['username']
-            password = p['app']['password']
-            print(f'[{i}] App: {app_name} : Username {username} : Password {password}')
-            i += 1
-    elif user_selection == 0:
-        return
-    elif int(user_selection) in tempPassArr:
-        password_to_copy = tempPassArr[int(user_selection)]['app']['password']
-        addToClipBoard(password_to_copy)
-        print(f'{tempPassArr[int(user_selection)]['app']} password copied to clipboard')
-
-def change_settings(pd):
-    pass
+def application_modify_control(pd):
+    pass # select, change, or delete
 
 def process_user_input() -> dict:
     args = docopt(__doc__)
@@ -282,13 +330,12 @@ def process_user_input() -> dict:
 
 def main():
     pd = PasswordData(process_user_input())
-    pd.find_file
-    pd.enter_master_password
-
-    # control_interface(pd)
-    encrypt_file('password', 'test_file.crypt', 'this is my string of json')
-    t = decrypt_file('password', 'test_file.crypt')
-    print(t)
+    pd.initialization_work_flow()
+    if pd.app:
+        single_password_workflow(pd)
+        pass
+    else:
+        control_interface(pd)
 
 if __name__ == "__main__":
     main()
