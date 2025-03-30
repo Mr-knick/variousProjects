@@ -2,6 +2,11 @@ import pytest
 from passwordManager import PasswordData
 from utility import InputStyle, decrypt_file, encrypt_file
 
+sample_password_dict = {
+    'gmail': {'username': 'admin1234', 'password': 'password1234'},
+    'facebook': {'username': 'test1234', 'password': 'password1234'}
+}
+
 
 def test_password_data_init():
     pd = PasswordData({'filepath': './pass.crypt'})

@@ -22,13 +22,17 @@ class InputStyle(enum.Enum):
 
 
 def add_to_clipboard(text):
-    command = 'echo ' + text.strip() + '| clip'
+    command = 'echo ' + text + '| clip'
     os.system(command)
     print(f'{print_hidden(text)} copied to clipboard')
 
 
 def print_hidden(text: str) -> str:
-    return f"{text[0:1] + '*' * (len(text)-1)}"
+    try:
+        return f"{text[0:1] + '*' * (len(text) - 1)}"
+    except:
+        print("String cannot be displayed")
+        return ""
 
 
 def clear_screen():
@@ -37,6 +41,12 @@ def clear_screen():
 
 def generate_password():
     pass
+
+
+def get_validated_user_selection():
+    while not validate_user_input(user_selection := input().strip().lower()):
+        print("Invalid input. Please try again.")
+    return user_selection
 
 
 def validate_user_input(user_intput: Optional[str] = "") -> bool:
@@ -52,7 +62,7 @@ def hidden_input(instruction: str) -> str:
     return hidden_user_input
 
 
-def get_user_input(input_style: InputStyle, instructions: Optional[str] = "") -> Optional[str]:
+def get_user_input_styled(input_style: InputStyle, instructions: Optional[str] = "") -> Optional[str]:
     if input_style.HIDDEN:
         return hidden_input(instructions)
     if input_style.VISIBLE:
