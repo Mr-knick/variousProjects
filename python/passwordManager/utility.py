@@ -11,6 +11,8 @@ from base64 import urlsafe_b64encode, urlsafe_b64decode
 import os
 import getpass
 import enum
+import string
+import random
 
 from typing import Optional
 from pycparser.ply.yacc import string_types
@@ -30,7 +32,7 @@ def add_to_clipboard(text):
 def print_hidden(text: str) -> str:
     try:
         return f"{text[0:1] + '*' * (len(text) - 1)}"
-    except:
+    except ValueError:
         print("String cannot be displayed")
         return ""
 
@@ -39,8 +41,10 @@ def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 
-def generate_password():
-    pass
+def generate_password(length: int = 14) -> str:
+    all_characters = string.ascii_letters + string.digits + string.punctuation
+    password = ''.join(random.choice(all_characters) for i in range(length))
+    return password
 
 
 def get_validated_user_selection():
